@@ -1,7 +1,8 @@
 import sys
 from collections import deque
 import time
-from heapq import heappush
+from heapq import heappush, heappop
+import itertools
 
 class Operations:
     up = 'Up'
@@ -12,10 +13,41 @@ class Operations:
 class PriorityQueue:
 
     def __init__(self):
-        pass
+        self.p_queue = []   # List of nodes arranged in a heap
+        self.added_nodes = {}   # Dictionary to add 'node' as key and list of priority, count and node as value for the key
+        self.counter = itertools.count()    # To count the sequence of nodes initialized
+        self.REMOVED = 'YES'                #
 
-    def add_state(self, state, priority=0):
-        pass
+    def add_node(self, node, priority=0):
+        if node in self.added_nodes:
+            self.remove_node(node)
+
+        self.count = next(self.counter)
+        node_features = [priority, self.count, node]
+        self.added_nodes[node] = node_features      # This is built for searching purposes
+        heappush(self.p_queue, node_features)       # This is the implementation of heap as priority queue
+
+    def is_not_empty(self):
+        return len(self.p_queue) > 0
+
+    def has_node(self, node):
+        return node in self.added_nodes
+
+    def size(self):
+        return len(self.p_queue)
+
+    def remove_node(self, node):
+        removed_node = self.added_nodes.pop(node)
+        removed_node[-1] = self.REMOVED     # Assigning the removed node with 'YES' string to indicate that it has been removed
+
+    def pop_node(self):
+        # This function removes and returns the lowest priority node
+        while self.p_queue:
+            priority, count, node = heappop(self.p_queue)
+            if node is not self.REMOVED:
+                del self.added_nodes[node]
+                return node
+        raise KeyError('No state found in this priority queue!!')
 
 
 
@@ -185,6 +217,49 @@ def ast(initial_state):
     # Make frontier a priority queue with Manhattan distance as a paramter to decide priority
     frontier = PriorityQueue()
     manhattan_cost = initial_state.manhattan_cost()  # Manhattan distance between current state and the goal state
+
+    frontier.add_node(initial_state, manhattan_cost)    # Manhattan cost along with the estimated cost to goal from current node decides the actual priority
+
+    explored = set()
+    nodes_expanded = 0
+    max_search_depth = -1
+
+    while frontier.is_not_empty():
+        node = frontier.pop_node()
+        explored.add(node)
+
+        if node.check_goal_state():
+            path_to_goal = []
+            current_state = node
+
+            while current_state.parent_state:
+                path_to_goal.append(current_state.operation_on_parent)
+                current_state = current_state.parent_state
+
+            path_to_goal = path_to_goal[::-1]  # Reversing the order of path list
+            cost_of_path = len(path_to_goal)
+            search_depth = state.cost_of_path
+            running_time = time.clock() - start_time
+            import resource
+            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time,
+                          max_ram_usage)
+            return
+
+        nodes_expanded += 1
+
+        for neighbor in node.neighbors():
+
+            if (not neighbor in explored or frontier.has_node(neighbor)):
+                frontier.add_node(neighbor, neighbor.cost_of_path + neighbor.manhattan_cost())
+                max_search_depth = max(max_search_depth, neighbor.cost_of_path)
+
+            elif (frontier.has_node(neighbor)):
+                frontier.remove_node(neighbor)
+                frontier.add_node(neighbor, neighbor.cost_of_path + neighbor.manhattan_cost)
+
+    print("No solution to this problem!!!")
+
 
 
 if __name__ == '__main__':
