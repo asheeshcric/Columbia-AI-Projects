@@ -1,12 +1,23 @@
 import sys
 from collections import deque
 import time
+from heapq import heappush
 
 class Operations:
     up = 'Up'
     down = 'Down'
     right = 'Right'
     left = 'Left'
+
+class PriorityQueue:
+
+    def __init__(self):
+        pass
+
+    def add_state(self, state, priority=0):
+        pass
+
+
 
 class State:
 
@@ -54,6 +65,14 @@ class State:
             available_neighbors.append(State(tuple(new_state), self, operation, self.cost_of_path + 1))
 
         return available_neighbors
+
+    def manhattan_cost(self):
+        distance = 0
+        for i in range(3):
+            # Offset in no. of rows and no. of columns gives the manhattan distance
+            distance += abs((self.state[i] - i) / 3) + abs((self.state[i] - i) % 3)
+        # This distance gives the actual path cost from root node to the current node - Denoted as g(n)
+        return distance
 
 
 def write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time, max_ram_usage):
@@ -162,7 +181,11 @@ def dfs(initial_state):
     print("The given problem has no solution!!!")
 
 def ast(initial_state):
-    pass
+    start_time = time.clock()
+    # Make frontier a priority queue with Manhattan distance as a paramter to decide priority
+    frontier = PriorityQueue()
+    manhattan_cost = initial_state.manhattan_cost()  # Manhattan distance between current state and the goal state
+
 
 if __name__ == '__main__':
     input_arguments = sys.argv[1:]
