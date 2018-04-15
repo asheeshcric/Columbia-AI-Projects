@@ -4,11 +4,6 @@ import time
 from heapq import heappush, heappop
 import itertools
 
-class Operations:
-    up = 'Up'
-    down = 'Down'
-    right = 'Right'
-    left = 'Left'
 
 class PriorityQueue:
 
@@ -16,7 +11,7 @@ class PriorityQueue:
         self.p_queue = []   # List of nodes arranged in a heap
         self.added_nodes = {}   # Dictionary to add 'node' as key and list of priority, count and node as value for the key
         self.counter = itertools.count()    # To count the sequence of nodes initialized
-        self.REMOVED = 'YES'                #
+        self.REMOVED = 'YES'                # To mark that a node has been removed from queue
 
     def add_node(self, node, priority=0):
         if node in self.added_nodes:
@@ -50,6 +45,11 @@ class PriorityQueue:
         raise KeyError('No state found in this priority queue!!')
 
 
+class Operations:
+    up = 'Up'
+    down = 'Down'
+    right = 'Right'
+    left = 'Left'
 
 class State:
 
@@ -226,7 +226,7 @@ def ast(initial_state):
 
     while frontier.is_not_empty():
         node = frontier.pop_node()
-        explored.add(node)
+        explored.add(node.state)
 
         if node.check_goal_state():
             path_to_goal = []
@@ -250,7 +250,7 @@ def ast(initial_state):
 
         for neighbor in node.neighbors():
 
-            if (not neighbor in explored or frontier.has_node(neighbor)):
+            if not (neighbor.state in explored or frontier.has_node(neighbor)):
                 frontier.add_node(neighbor, neighbor.cost_of_path + neighbor.manhattan_cost())
                 max_search_depth = max(max_search_depth, neighbor.cost_of_path)
 
