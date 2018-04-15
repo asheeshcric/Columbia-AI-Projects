@@ -101,20 +101,21 @@ class State:
     def manhattan_cost(self):
         distance = 0
         for i in range(3):
-            # Offset in no. of rows and no. of columns gives the manhattan distance
-            distance += abs((self.state[i] - i) / 3) + abs((self.state[i] - i) % 3)
+            if self.state[i] != 0:
+                # Offset in no. of rows and no. of columns gives the manhattan distance
+                distance += abs(self.state[i] - i) / 3 + abs(self.state[i] - i) % 3
         # This distance gives the actual path cost from root node to the current node - Denoted as g(n)
         return distance
 
 
 def write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time, max_ram_usage):
     output = open('output.txt', 'w')
-    output.write('path_to_goal: {}\n\n'.format(path_to_goal))
-    output.write('cost_of_path: {}\n\n'.format(cost_of_path))
-    output.write('nodes_expanded: {}\n\n'.format(nodes_expanded))
-    output.write('search_depth: {}\n\n'.format(search_depth))
-    output.write('max_search_depth: {}\n\n'.format(max_search_depth))
-    output.write('running_time: {} seconds\n\n'.format(running_time))
+    output.write('path_to_goal: {}\n'.format(path_to_goal))
+    output.write('cost_of_path: {}\n'.format(cost_of_path))
+    output.write('nodes_expanded: {}\n'.format(nodes_expanded))
+    output.write('search_depth: {}\n'.format(search_depth))
+    output.write('max_search_depth: {}\n'.format(max_search_depth))
+    output.write('running_time: {}\n'.format(running_time))
     output.write('max_ram_usage: {}'.format(max_ram_usage))
     output.close()
 
@@ -147,10 +148,9 @@ def bfs(initial_state):
             search_depth = state.cost_of_path
             running_time = time.clock() - start_time
             import resource
-            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time, max_ram_usage)
+            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 10**6
+            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, round(running_time, 8), round(running_time, 8))
             return
-            # Calculate ram usage and write output to file
 
         # The output cannot be derived from the current node. So, it should be expanded
         nodes_expanded += 1
@@ -194,16 +194,16 @@ def dfs(initial_state):
             search_depth = state.cost_of_path
             running_time = time.clock() - start_time
             import resource
-            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time,
-                          max_ram_usage)
+            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 10**6
+            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, round(running_time, 8),
+                          round(max_ram_usage, 8))
             return
             # Calculate ram usage and write output to file
 
         # The output cannot be derived from the current node. So, it should be expanded
         nodes_expanded += 1
 
-        for neighbor in state.neighbors()[::-1]:        # Reversing the list of neighbors so that popping results in UDLR
+        for neighbor in state.neighbors()[::-1]:        # Reversing the list of neighbors so that popping results in UDLR sequence
             neighbor_being_checked = neighbor.state
             if neighbor.state not in explored:
                 frontier.append(neighbor)
@@ -238,12 +238,12 @@ def ast(initial_state):
 
             path_to_goal = path_to_goal[::-1]  # Reversing the order of path list
             cost_of_path = len(path_to_goal)
-            search_depth = state.cost_of_path
+            search_depth = node.cost_of_path
             running_time = time.clock() - start_time
             import resource
-            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, running_time,
-                          max_ram_usage)
+            max_ram_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 10**6
+            write_to_file(path_to_goal, cost_of_path, nodes_expanded, search_depth, max_search_depth, round(running_time, 8),
+                          round(max_ram_usage, 8))
             return
 
         nodes_expanded += 1
