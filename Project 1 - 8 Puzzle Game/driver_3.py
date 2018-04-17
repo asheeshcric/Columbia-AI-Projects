@@ -100,10 +100,10 @@ class State:
 
     def manhattan_cost(self):
         distance = 0
-        for i in range(3):
+        for i in range(9):
             if self.state[i] != 0:
                 # Offset in no. of rows and no. of columns gives the manhattan distance
-                distance += abs(self.state[i] - i) / 3 + abs(self.state[i] - i) % 3
+                distance += abs(self.state[i] // 3 - i // 3)+ abs(self.state[i] % 3 - i % 3)
         # This distance gives the actual path cost from root node to the current node - Denoted as g(n)
         return distance
 
