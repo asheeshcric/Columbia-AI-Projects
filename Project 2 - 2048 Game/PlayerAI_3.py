@@ -7,7 +7,7 @@ from BaseAI_3 import BaseAI
 
 class PlayerAI(BaseAI):
     def __init__(self):
-        self.timeLimit = 0.2
+        self.timeLimit = 0.23
         self.startTime = None
 
     def score(self, grid):
@@ -75,7 +75,6 @@ class PlayerAI(BaseAI):
                 current = next
                 next += 1
 
-        # Left / Right direction
         for y in range(grid.size):
             current = 0
             next = current + 1
