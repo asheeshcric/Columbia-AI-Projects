@@ -1,181 +1,229 @@
+# -*- coding: utf-8 -*-
+
 import sys
-
-assignments = []
-rows = 'ABCDEFGHI'
-cols = '123456789'
-
-
-def cross(a, b):
-
-    """
-    Cross product of a and b
-    :param a: String of characters/numbers
-    :param b: String of characters/strings
-    :return: list of cellnames
-    """
-    return [s+t for s in a for t in b]
+import copy
+import itertools
+import queue
 
 
-boxes = cross(rows, cols)
-row_units = [cross(r, cols) for r in rows]
-column_units = [cross(rows, c) for c in cols]
-square_units = [cross(rs, cs) for rs in ('ABC', 'DEF', 'GHI') for cs in ('123', '456', '789')]
-#diagonal_unit_1 = [r+c for r,c in zip(rows, cols)]
-#diagonal_unit_2 = [r+c for r,c in zip(rows, cols[::-1])]
-#unitlist = row_units + column_units + square_units + [diagonal_unit_1] + [diagonal_unit_2]
-unitlist = row_units + column_units + square_units
-units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
-peers = dict((s, set(sum(units[s], []))- set([s])) for s in boxes)
+def createSudokuCsp():
+    global sudokuConstraint
+
+    # Create domain values
+    domain = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    # Create sudoku board containing all the variables
+    sudokuBoard = [['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9'],
+                   ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9'],
+                   ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9'],
+                   ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8', 'D9'],
+                   ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9'],
+                   ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'],
+                   ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9'],
+                   ['H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'H7', 'H8', 'H9'],
+                   ['I1', 'I2', 'I3', 'I4', 'I5', 'I6', 'I7', 'I8', 'I9']]
+    # Assign domain values for each variable
+    sudokuDomain = {key: list(domain) for row in sudokuBoard for key in row}
+    # Create a copy of sudoku dictionary to store value assignment for each variable
+    sudokuAssign = {key: 0 for key in sudokuDomain}
+
+    # Create constraints
+    constraintList = []
+    # Constraints along row
+    for row in sudokuBoard:
+        constraintList = constraintList + list(itertools.permutations(row, 2))
+    # Constraints along column
+    sudokuBoardT = list(map(list, zip(*sudokuBoard)))  # Transpose the sudoku board
+    for col in sudokuBoardT:
+        constraintList = constraintList + list(itertools.permutations(col, 2))
+    # Constraints within each 3x3 square
+    for row in [0, 3, 6]:
+        for col in [0, 3, 6]:
+            box = [val for row in sudokuBoard[row:row + 3] for val in row[col:col + 3]]
+            constraintList = constraintList + list(itertools.permutations(box, 2))
+    # Remove duplicate constraints
+    constraintList = list(set(constraintList))
+    # Create a dictionary to store constraints. Initialize constraints to empty lists.
+    sudokuConstraint = {key: list([]) for key in sudokuDomain}
+    # Associate the constraints with their respective keys in a dictionary
+    for val in constraintList:
+        sudokuConstraint[val[0]].append(val)
+
+    return sudokuAssign, sudokuDomain, constraintList
 
 
-
-def print_outout(result):
-
-  output = ''
-  for box in boxes:
-    output += result[box]
-  return output
-
-
-def grid_values(grid):
-    """
-    Convert grid into a dict of {square: char} with '123456789' for empties.
-    Args:
-        grid(string) - A grid in string form.
-    Returns:
-        A grid in dictionary form
-            Keys: The boxes, e.g., 'A1'
-            Values: The value in each box, e.g., '8'. If the box has no value, then the value will be '123456789'.
-    """
-    chars = []
-    digits = '123456789'
-    for c in grid:
-        if c in digits:
-            chars.append(c)
-        if c == '0':
-            chars.append(digits)
-    assert len(chars) == 81
-    return dict(zip(boxes, chars))
+def selectUnassignedVariable(sudokuAssign, sudokuDomain):
+    # Minimum remaining values heuristic is used
+    MRV = 100  # A randomly chosen number larger than domain size
+    for row in 'ABCDEFGHI':
+        for col in '123456789':
+            if sudokuAssign[row + col] == 0:  # Consider only unassigned variables
+                value = sudokuDomain[row + col]
+                if len(value) < MRV:
+                    MRV = len(value)
+                    chosenKey = row + col
+    return chosenKey
 
 
-def assign_value(values, box, value):
-  """
-  Please use this function to update your values dictionary!
-  Assigns a value to a given box. If it updates the board record it.
-  """
-  values[box] = value
-  if len(value) == 1:
-    assignments.append(values.copy())
-  return values
+def consistent(sudokuAssign, sudokuDomain, chosenKey, value):
+    global sudokuConstraint
+
+    constraintList = sudokuConstraint[chosenKey]
+    for constraint in constraintList:
+        if value == sudokuAssign[constraint[1]]:
+            return False
+    return True
 
 
-def naked_twins(values):
-    """Eliminate values using the naked twins strategy.
-    Args:
-        values(dict): a dictionary of the form {'box_name': '123456789', ...}
-    Returns:
-        the values dictionary with the naked twins eliminated from peers.
-    """
+def inference(sudokuAssign, sudokuDomain, chosenKey, value):
+    # This inference function implements forward checking
 
-    # Find all instances of naked twins
-    # Eliminate the naked twins as possibilities for their peers
+    global sudokuConstraint
 
-    for unit in unitlist:
-        unit_dict = {}
-        for box in unit:
-            if len(values[box]) == 2:
-                unit_dict.setdefault(values[box], []).append(box)
-        twins_list = {k: v for k, v in unit_dict.items() if len(v) == 2}
-        for k, v in twins_list.items():
-            for box in unit:
-                for digit in k:
-                    if box not in v:
-                        values = assign_value(values, box, values[box].replace(digit, ''))
-
-    return values
+    constraintList = sudokuConstraint[chosenKey]
+    for constraint in constraintList:
+        checkKey = constraint[1]
+        if sudokuAssign[checkKey] == 0:  # Perform forward checking only on unassigned variables
+            if value in sudokuDomain[checkKey]:
+                sudokuDomain[checkKey].remove(value)
+            if not sudokuDomain[checkKey]:  # If domain is empty, i.e., no legal values remaining
+                return (False, sudokuAssign, sudokuDomain)
+    return (True, sudokuAssign, sudokuDomain)
 
 
-def eliminate(values):
-  """
-  Go through all the boxes, and whenever there is a box with a value, eliminate this value from the values of all its peers.
-  Input: A sudoku in dictionary form.
-  Output: The resulting sudoku in dictionary form.
-  """
-  solved_values = [box for box in values.keys() if len(values[box]) == 1]
-  for box in solved_values:
-    digit = values[box]
-    for peer in peers[box]:
-      values = assign_value(values, peer, values[peer].replace(digit, ''))
-  return values
-
-def only_choice(values):
-  """
-  Go through all the units, and whenever there is a unit with a value that only fits in one box, assign the value to this box.
-  Input: A sudoku in dictionary form.
-  Output: The resulting sudoku in dictionary form.
-  """
-  for unit in unitlist:
-    for digit in '123456789':
-      dplaces = [box for box in unit if digit in values[box]]
-      if len(dplaces) == 1:
-        values = assign_value(values, dplaces[0], digit)
-  return values
-
-def reduce_puzzle(values):
-  """
-  Iterate eliminate() and only_choice(). If at some point, there is a box with no available values, return False.
-  If the sudoku is solved, return the sudoku.
-  If after an iteration of both functions, the sudoku remains the same, return the sudoku.
-  Input: A sudoku in dictionary form.
-  Output: The resulting sudoku in dictionary form.
-  """
-
-  stalled = False
-  while not stalled:
-    solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-    values = eliminate(values)
-    values = naked_twins(values)
-    values = only_choice(values)
-    solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
-    stalled = solved_values_before == solved_values_after
-    if len([box for box in values.keys() if len(values[box]) == 0]):
-      return False
-  return values
-
-def search(values):
-  "Using depth-first search and propagation, try all possible values."
-  # First, reduce the puzzle using the previous function
-  values = reduce_puzzle(values)
-  if values is False:
-    return False  ## Failed earlier
-  if all(len(values[s]) == 1 for s in boxes):
-    return values  ## Solved!
-  # Choose one of the unfilled squares with the fewest possibilities
-  n, s = min((len(values[s]), s) for s in boxes if len(values[s]) > 1)
-  # Now use recurrence to solve each one of the resulting sudokus, and
-  for value in values[s]:
-    new_sudoku = values.copy()
-    new_sudoku[s] = value
-    attempt = search(new_sudoku)
-    if attempt:
-      return attempt
+def backtracksearch(sudokuAssign, sudokuDomain):
+    # Check if assignment is complete
+    if all(value > 0 for key, value in sudokuAssign.items()):
+        return (True, sudokuAssign, sudokuDomain)
+    chosenKey = selectUnassignedVariable(sudokuAssign, sudokuDomain)
+    for value in sudokuDomain[chosenKey]:
+        if consistent(sudokuAssign, sudokuDomain, chosenKey, value):
+            sudokuAssignNew = copy.deepcopy(sudokuAssign)
+            sudokuDomainNew = copy.deepcopy(sudokuDomain)
+            sudokuAssignNew[chosenKey] = value
+            sudokuDomainNew[chosenKey] = [value]
+            resultInference = inference(sudokuAssignNew, sudokuDomainNew, chosenKey, value)
+            if resultInference[0] == True:
+                resultBTS = backtracksearch(resultInference[1], resultInference[2])
+                if resultBTS[0] == True:
+                    return resultBTS
+    return (False, sudokuAssign, sudokuDomain)
 
 
+def makeAssign(sudokuAssign, sudokuDomain):
+    for key, value in sudokuDomain.items():
+        if len(value) == 1:
+            sudokuAssign[key] = value[0]
+    return sudokuAssign
 
 
-if __name__ == '__main__':
+def getNeighbours(Xi):
+    global sudokuConstraint
+    neighbours = [Xk for Xi, Xk in sudokuConstraint[Xi]]
+    return neighbours
 
-  with open('output.txt', 'wb') as ofile:
-    inp = sys.argv[1]
-    values = grid_values(inp)
-    soln = search(values)
-    ofile.write(print_outout(soln))
 
-#if __name__ == '__main__':
-#
-#  with open('sudokus_start.txt') as f:
-#    with open('test_out.txt', 'wb') as ofile:
-#      for line in f:
-#        values = grid_values(line)
-#        soln = search(values)
-#        ofile.write(print_outout(soln))
+def revise(sudokuDomain, Xi, Xj):
+    revised = False
+    for x in sudokuDomain[Xi]:
+        if not any(y != x for y in sudokuDomain[Xj]):
+            sudokuDomain[Xi].remove(x)
+            revised = True
+    return revised
+
+
+def AC3(sudokuAssign, sudokuDomain, constraintList):
+    q = queue.Queue()
+    for constraint in constraintList:
+        q.put(constraint)
+    while not q.empty():
+        Xi, Xj = q.get()
+        if revise(sudokuDomain, Xi, Xj):
+            if not sudokuDomain[Xi]:
+                return (False, sudokuAssign, sudokuDomain)
+            for Xk in getNeighbours(Xi):
+                q.put((Xk, Xi))
+    sudokuAssign = makeAssign(sudokuAssign, sudokuDomain)
+    return (True, sudokuAssign, sudokuDomain)
+
+
+def visualizeBoard(sudokuAssign):
+    # Prints a sudoku grid containing the assigned variables.
+    # This function accepts a dictionary of the form:
+    # sudokuAssign = {'A1':1, 'A2':4, 'A3':8, 'A4':0, 'A5':0, 'A6':7, 'A7':5, 'A8':0, 'A9':3,
+    #                'B1':3, 'B2':0, 'B3':2, 'B4':0, 'B5':4, 'B6':0, 'B7':9, 'B8':0, 'B9':1,
+    #                   :
+    #                   :
+    #                'I1':2, 'I2':8, 'I3':4, 'I4':0, 'I5':6, 'I6':0, 'I7':0, 'I8':3, 'I9':9,}
+    # '0' values indicate unassigned variables and will not be printed.
+
+    s = ""
+    line = "-------------------------------------\n"
+    s += line
+    for row in "ABCDEFGHI":
+        s += "|"
+        for col in "123456789":
+            if sudokuAssign[row + col] != 0:
+                s += ("%3d" % sudokuAssign[row + col]) + "|"
+            else:
+                s += ("%3c" % ' ') + "|"
+        s += "\n" + line
+
+    print(s)
+
+
+def main(sudokuStrStart):
+    # Initialize sudoku assignments, domain, and constraints
+    sudokuAssign, sudokuDomain, constraintList = createSudokuCsp()
+
+    # Load sudoku starting board
+    index = -1
+    for j in 'ABCDEFGHI':
+        for i in '123456789':
+            key = j + i
+            index = index + 1
+            sudokuAssign[key] = int(sudokuStrStart[index])
+            if int(sudokuStrStart[index]) != 0:
+                sudokuDomain[key] = [int(sudokuStrStart[index])]
+
+    print('Starting sudoku board')
+    visualizeBoard(sudokuAssign)
+
+    # Run AC3 algorithm first.
+    flag, sudokuAssignNew, sudokuDomainNew = AC3(copy.deepcopy(sudokuAssign), copy.deepcopy(sudokuDomain),
+                                                 copy.deepcopy(constraintList))
+    algoName = 'AC3'
+    # If the assignment is consistent after AC3, copy the assigned values into respective variables
+    if flag == True:
+        sudokuAssign = sudokuAssignNew
+        sudokuDomain = sudokuDomainNew
+    if all(value > 0 for key, value in sudokuAssignNew.items()):
+        pass  # All variables have been successfully assigned by AC3 algorithm
+    else:  # If AC3 fails, use the reduced domain space and BTS to solve the puzzle
+        print('Mid sudoku board')
+        visualizeBoard(sudokuAssign)
+        flag, sudokuAssign, sudokuDomain = backtracksearch(copy.deepcopy(sudokuAssign), copy.deepcopy(sudokuDomain))
+        algoName = 'BTS'
+
+    print('Completed sudoku board')
+    visualizeBoard(sudokuAssign)
+
+    # Create the sudoku string from the sudoku assignment dictionary
+    sudokuStrFinish = ''
+    index = -1
+    for j in 'ABCDEFGHI':
+        for i in '123456789':
+            key = j + i
+            sudokuStrFinish = sudokuStrFinish + str(sudokuAssign[key])
+
+    # Write output to file
+    file = open("output.txt", "w")
+    file.write('{} {}'.format(sudokuStrFinish, algoName))
+    file.close()
+
+
+if __name__ == "__main__":
+    # Input sudoku string
+    sudokuStrStart = sys.argv[1]
+    #    sudokuStrStart = '000000000302540000050301070000000004409006005023054790000000050700810000080060009'
+    # Call main function
+    main(sudokuStrStart)
