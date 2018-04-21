@@ -1,188 +1,130 @@
-import time
-import math
-
-from random import randint
 from BaseAI_3 import BaseAI
+
+import time
+import numpy as np
+import itertools
+
+player_allowance = 0.02
+player_time_limit = 0.2 - player_allowance
+player_prev_time = 0
+player_alarm = False
+tile_values = [2, 4]
+max_depth = 4
 
 
 class PlayerAI(BaseAI):
-    def __init__(self):
-        self.timeLimit = 0.23
-        self.startTime = None
-
-    def score(self, grid):
-        smoothWeight = 0.1
-        emptyWeight = 2.7
-        maxWeight = 1.0
-        monWeight = 1.0
-
-        smoothValue = self.check_smoothness(grid)
-        availableCells = len(grid.getAvailableCells())
-        if availableCells > 0:
-            emptyValue = math.log(availableCells)
-        else:
-            emptyValue = -100000
-        maxValue = math.log(grid.getMaxTile(), 2)
-        monValue = self.check_monaticity(grid)
-
-        heuristicValue = smoothWeight * smoothValue + maxWeight * maxValue + emptyWeight * emptyValue + monWeight * monValue
-
-        return heuristicValue
-
-    def check_smoothness(self, grid):
-
-        directionVectors = ((1, 0), (0, 1))
-        smoothScore = 0.0
-        for x in range(grid.size):
-            for y in range(grid.size):
-                if grid.map[x][y] != 0:
-                    for vector in directionVectors:
-                        for d in range(1, grid.size + 1):
-                            x_n = x + vector[0] * d
-                            y_n = y + vector[1] * d
-                            if x_n < 0 or x_n >= grid.size or y_n < 0 or y_n >= grid.size:
-                                break
-                            if grid.map[x_n][y_n] != 0:
-                                smoothScore -= abs(math.log(grid.map[x][y], 2) - math.log(grid.map[x_n][y_n], 2))
-                                break
-        return smoothScore
-
-    def check_monaticity(self, grid):
-        total = [0.0 for i in range(grid.size)]
-
-        for x in range(grid.size):
-            current = 0
-            next = current + 1
-            while next < 4:
-                while next < 4 and grid.map[x][next] != 0:
-                    next += 1
-                if next >= 4: next -= 1
-                if grid.map[x][current] != 0:
-                    currentValue = math.log(grid.map[x][current], 2)
-                else:
-                    currentValue = 0
-
-                if grid.map[x][next] != 0:
-                    nextValue = math.log(grid.map[x][next], 2)
-                else:
-                    nextValue = 0
-
-                if currentValue > nextValue:
-                    total[0] += nextValue - currentValue
-                elif nextValue > currentValue:
-                    total[1] += currentValue - nextValue
-
-                current = next
-                next += 1
-
-        for y in range(grid.size):
-            current = 0
-            next = current + 1
-            while next < 4:
-                while next < 4 and grid.map[next][y] != 0:
-                    next += 1
-                if next >= 4:
-                    next -= 1
-                if grid.map[current][y] != 0:
-                    currentValue = math.log(grid.map[current][y], 2)
-                else:
-                    currentValue = 0
-
-                if grid.map[next][y] != 0:
-                    nextValue = math.log(grid.map[next][y], 2)
-                else:
-                    nextValue = 0
-
-                if currentValue > nextValue:
-                    total[2] += nextValue - currentValue
-                elif nextValue > currentValue:
-                    total[3] += currentValue - nextValue
-
-                current = next
-                next += 1
-
-        return max(total[0], total[1]) + max(total[2], total[3])
-
-    def predict_move(self, grid, n_move):
-        gridCopy = grid.clone()
-        gridCopy.move(n_move)
-        return gridCopy
-
     def getMove(self, grid):
-        # Start time for making a move
-        self.startTime = time.clock()
+        global player_time_limit
+        global player_prev_time
+        global player_alarm
+        player_alarm = False
+        player_prev_time = time.clock()
+        grid.depth = 0
+        (child, _) = max_play(grid, -np.inf, np.inf)
+        return child
 
-        # Retrieving all the available moves from Grid
-        moves = grid.getAvailableMoves()
 
-        if not moves:  # Game ends here
-            return None
+def max_play(grid, alpha, beta):
+    global player_time_limit
+    global player_prev_time
+    global player_alarm
+    if terminal_test(grid):
+        return (None, evaluate_utility(grid))
 
-        # Choosing a random move to begin with
-        bestMove = moves[randint(0, len(moves) - 1)]
-        bestScore = self.score(self.predict_move(grid, bestMove))
+    (_, max_utility) = (None, -np.inf)
 
-        try:
-            depth = 1
-            while True:
-                score, move = self.alpha_beta(grid, depth)
-                if score > bestScore:
-                    bestMove = move
-                    bestScore = score
-                depth += 1
+    moves = grid.getAvailableMoves()
 
-        except Exception:
-            return bestMove
+    for move in moves:
+        child_grid = grid.clone()
+        child_grid.depth = grid.depth + 1  # Increment the depth of node
+        child_grid.move(move)
+        (_, utility) = min_play(child_grid, alpha, beta)
 
-    def alpha_beta(self, grid, depth, alpha=float("-inf"), beta=float("inf"), maxPlayer=True):
+        if utility > max_utility:
+            (max_move, max_utility) = (move, utility)
 
-        if time.clock() - self.startTime >= self.timeLimit:
-            raise Exception
+        if max_utility >= beta:
+            break
 
-        if depth == 0:
-            return self.score(grid), None
+        if max_utility > alpha:
+            alpha = max_utility
 
-        # now we need to go over all the legal moves and find best
-        bestScore = float("-inf") if maxPlayer else float("inf")
-        bestMove = None
+        if player_alarm or player_update_alarm():
+            break
 
-        if maxPlayer:
-            # Estimating the maximizing move to play for us
-            moves = grid.getAvailableMoves()
-            if not moves:
-                return self.score(grid), None
+    return max_move, max_utility
 
-            for move in moves:
-                nextGame = self.predict_move(grid, move)
 
-                score, _ = self.alpha_beta(nextGame, depth - 1, alpha, beta, not maxPlayer)
+def min_play(grid, alpha, beta):
+    global player_time_limit
+    global player_prev_time
+    global player_alarm
+    if terminal_test(grid):
+        return (None, evaluate_utility(grid))
 
-                if score >= bestScore:
-                    bestScore = score
-                    bestMove = move
+    (_, min_utility) = (None, np.inf)
 
-                if bestScore >= beta:
-                    break
+    cells = grid.getAvailableCells()
 
-                alpha = max(alpha, bestScore)
-        else:
-            # Assuming that the Computer makes the most minimizing move for us
-            availableCells = grid.getAvailableCells()
-            if not availableCells:
-                return self.score(grid), None
-            for cell in availableCells:
-                for tile_val in [2, 4]:
-                    nextGame = grid.clone()
-                    nextGame.setCellValue(cell, tile_val)
-                    score, _ = self.alpha_beta(nextGame, depth - 1, alpha, beta, not maxPlayer)
+    for cell_value in tile_values:
+        for cell in cells:
+            child_grid = grid.clone()
+            child_grid.depth = grid.depth + 1  # Increment the depth of node
+            child_grid.insertTile(cell, cell_value)
+            (_, utility) = max_play(child_grid, alpha, beta)
 
-                    if score <= bestScore:
-                        bestScore = score
-                        bestMove = None
+            if utility < min_utility:
+                (min_move, min_utility) = (cell, utility)
 
-                    if bestScore <= alpha:
-                        break
+            if min_utility <= alpha:
+                break
 
-                    beta = min(beta, bestScore)
+            if min_utility < beta:
+                beta = min_utility
 
-        return bestScore, bestMove
+            if player_alarm or player_update_alarm():
+                break
+
+        if player_alarm or player_update_alarm():
+            break
+
+    return min_move, min_utility
+
+
+def player_update_alarm():
+    global player_time_limit
+    global player_prev_time
+    global player_alarm
+    if (time.clock() - player_prev_time) >= player_time_limit:
+        player_alarm = True
+    else:
+        player_alarm = False
+    return player_alarm
+
+
+def terminal_test(grid):
+    if grid.depth >= max_depth or (not grid.canMove()):
+        return True
+    else:
+        return False
+
+
+def abs_diff(x, y):
+    return abs(x - y)
+
+
+def evaluate_utility(grid):
+    tot_cells = len(grid.getAvailableCells())
+    k1 = tot_cells / (grid.size * grid.size)
+
+    tot_diff = 0
+    for i in range(grid.size - 1):
+        tot_diff += sum(list(map(abs_diff, grid.map[i], grid.map[i + 1])))
+    for i in range(grid.size):
+        tot_diff += sum(list(map(abs_diff, grid.map[i][:-1], grid.map[i][1:])))
+
+    tot_cells = sum(itertools.chain.from_iterable(grid.map))
+    k2 = tot_diff / (2 * tot_cells)
+
+    return k1 - k2
